@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>H.I.V.E. — Sign in</title>
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="auth-wrap">
+    <div class="auth-card">
+      <div class="brand-center">
+        <div class="logo-hex">H</div>
+        <h1>H.I.V.E.</h1>
+        <div class="tagline">Hub for Items, Venues &amp; Exchange</div>
+      </div>
+
+      <div class="tabs">
+        <button class="tab active" data-tab="login" type="button">Login</button>
+        <button class="tab" data-tab="register" type="button">Register</button>
+      </div>
+
+      <form id="login-form" class="stack">
+        <div>
+          <label for="login-email">College email</label>
+          <input id="login-email" type="email" required placeholder="you@college.edu" />
+        </div>
+        <div>
+          <label for="login-password">Password</label>
+          <input id="login-password" type="password" required placeholder="••••••••" />
+        </div>
+        <button class="primary" type="submit">Enter the Hive</button>
+        <div id="login-msg" class="msg"></div>
+      </form>
+
+      <form id="register-form" class="stack" style="display:none">
+        <div>
+          <label for="reg-name">Full name</label>
+          <input id="reg-name" type="text" required placeholder="Jane Doe" />
+        </div>
+        <div>
+          <label for="reg-email">College email</label>
+          <input id="reg-email" type="email" required placeholder="you@college.edu" />
+        </div>
+        <div>
+          <label for="reg-password">Password</label>
+          <input id="reg-password" type="password" required minlength="8" placeholder="At least 8 characters" />
+        </div>
+        <button class="primary" type="submit">Create account</button>
+        <div id="register-msg" class="msg"></div>
+      </form>
+    </div>
+  </div>
+
+  <script src="bg.js"></script>
+  <script src="api.js"></script>
+  <script>
+    const tabs = document.querySelectorAll('.tab');
+    const forms = { login: document.getElementById('login-form'), register: document.getElementById('register-form') };
+
+    tabs.forEach((tab) => {
+      tab.addEventListener('click', () => {
+        tabs.forEach((t) => t.classList.remove('active'));
+        tab.classList.add('active');
+        Object.entries(forms).forEach(([name, form]) => {
+          form.style.display = name === tab.dataset.tab ? 'flex' : 'none';
+        });
+      });
+    });
+
+    function showMsg(id, text, ok) {
+      const el = document.getElementById(id);
+      el.textContent = text;
+      el.className = 'msg ' + (ok ? 'ok' : 'error');
+    }
+
+    if (Api.token) {
+      // Already signed in — skip straight to the dashboard.
+      window.location.href = 'dashboard.html';
+    }
+
+    document.getElementById('login-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const email = document.getElementById('login-email').value.trim();
+      const password = document.getElementById('login-password').value;
+      try {
+        const data = await Api.post('/api/auth/login', { email, password });
+        Api.token = data.token;
+        window.location.href = 'dashboard.html';
+      } catch (err) {
+        showMsg('login-msg', err.message, false);
+      }
+    });
+
+    document.getElementById('register-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const name = document.getElementById('reg-name').value.trim();
+      const email = document.getElementById('reg-email').value.trim();
+      const password = document.getElementById('reg-password').value;
+      try {
+        const data = await Api.post('/api/auth/register', { name, email, password });
+        Api.token = data.token;
+        window.location.href = 'dashboard.html';
+      } catch (err) {
+        showMsg('register-msg', err.message, false);
+      }
+    });
+  </script>
+</body>
+</html>

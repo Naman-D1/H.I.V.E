@@ -1,0 +1,339 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>H.I.V.E. — Supplies Sharing</title>
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header class="top">
+    <div class="brand">
+      <div class="logo-hex">H</div>
+      <div>
+        <h1>H.I.V.E.</h1>
+        <div class="tagline">Supplies Sharing</div>
+      </div>
+    </div>
+    <div class="who">
+      <span id="who-name">—</span>
+      <span class="badge role" id="who-role">—</span>
+      <button class="small" id="logout-btn" type="button">Log out</button>
+    </div>
+  </header>
+
+  <main>
+    <a class="back-link" href="dashboard.html">&larr; Back to dashboard</a>
+
+    <section>
+      <div class="panel-toggle">
+        <h2 style="margin:0">Lend something</h2>
+        <button class="secondary" type="button" id="list-toggle-btn">+ New listing</button>
+      </div>
+
+      <div class="report-form" id="list-form-wrap">
+        <form id="list-form" class="stack" style="margin-top:16px; max-width:640px">
+          <div>
+            <label for="s-title">What can you lend?</label>
+            <input type="text" id="s-title" required placeholder="e.g. Casio fx-991 calculator" />
+          </div>
+          <div>
+            <label for="s-category">Category</label>
+            <select id="s-category">
+              <option value="stationery">Stationery</option>
+              <option value="electronics">Electronics</option>
+              <option value="books">Books</option>
+              <option value="lab_equipment">Lab equipment</option>
+              <option value="tools">Tools</option>
+              <option value="other" selected>Other</option>
+            </select>
+          </div>
+          <div>
+            <label for="s-description">Details</label>
+            <textarea id="s-description" rows="3" placeholder="Condition, what's included, where you can hand it over..."></textarea>
+          </div>
+          <button class="primary" type="submit">Publish listing</button>
+          <div id="list-msg" class="msg"></div>
+        </form>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>Browse</h2>
+      <div class="toolbar">
+        <input type="text" id="search-input" placeholder="Search title or details..." />
+        <select id="filter-category">
+          <option value="">All categories</option>
+          <option value="stationery">Stationery</option>
+          <option value="electronics">Electronics</option>
+          <option value="books">Books</option>
+          <option value="lab_equipment">Lab equipment</option>
+          <option value="tools">Tools</option>
+          <option value="other">Other</option>
+        </select>
+        <button class="small" id="mine-toggle" type="button">My listings only</button>
+      </div>
+      <div class="modules" id="supplies-grid">
+        <div class="module"><p>Loading…</p></div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>My borrow requests</h2>
+      <div class="hint">Things you've asked to borrow. You can hold up to 3 items at a time.</div>
+      <div id="my-requests"></div>
+    </section>
+
+    <footer class="foot">H.I.V.E. · Increment 2 — Supplies Sharing</footer>
+  </main>
+
+  <script src="bg.js"></script>
+  <script src="api.js"></script>
+  <script>
+    if (!Api.token) window.location.href = 'index.html';
+
+    let me = null;
+    let mineOnly = false;
+    const CATEGORY_LABEL = { stationery: 'Stationery', electronics: 'Electronics', books: 'Books', lab_equipment: 'Lab equipment', tools: 'Tools', other: 'Other' };
+    const STATUS_LABEL = { available: 'Available', on_loan: 'On loan', withdrawn: 'Withdrawn' };
+    const STATUS_CLASS = { available: 'avail', on_loan: 'loan', withdrawn: 'closed' };
+    const REQ_CLASS = { pending: 'pending', approved: 'resolved', rejected: 'rejected', cancelled: 'closed', returned: 'closed' };
+
+    async function loadMe() {
+      const data = await Api.get('/api/auth/me');
+      me = data.user;
+      document.getElementById('who-name').textContent = me.name;
+      document.getElementById('who-role').textContent = me.role;
+    }
+
+    // ---- Listing form ----
+    const toggleBtn = document.getElementById('list-toggle-btn');
+    const formWrap = document.getElementById('list-form-wrap');
+    toggleBtn.addEventListener('click', () => {
+      formWrap.classList.toggle('open');
+      toggleBtn.textContent = formWrap.classList.contains('open') ? '− Close' : '+ New listing';
+    });
+
+    document.getElementById('list-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const msgEl = document.getElementById('list-msg');
+      try {
+        await Api.post('/api/supplies', {
+          title: document.getElementById('s-title').value.trim(),
+          category: document.getElementById('s-category').value,
+          description: document.getElementById('s-description').value.trim(),
+        });
+        msgEl.className = 'msg ok';
+        msgEl.textContent = 'Listed! Others can now ask to borrow it.';
+        e.target.reset();
+        loadSupplies();
+      } catch (err) {
+        msgEl.className = 'msg error';
+        msgEl.textContent = err.message;
+      }
+    });
+
+    // ---- Browse ----
+    document.getElementById('filter-category').addEventListener('change', loadSupplies);
+    let searchDebounce;
+    document.getElementById('search-input').addEventListener('input', () => {
+      clearTimeout(searchDebounce);
+      searchDebounce = setTimeout(loadSupplies, 300);
+    });
+    const mineBtn = document.getElementById('mine-toggle');
+    mineBtn.addEventListener('click', () => {
+      mineOnly = !mineOnly;
+      mineBtn.classList.toggle('secondary', mineOnly);
+      loadSupplies();
+    });
+
+    async function loadSupplies() {
+      const grid = document.getElementById('supplies-grid');
+      const params = new URLSearchParams();
+      const category = document.getElementById('filter-category').value;
+      if (category) params.set('category', category);
+      const q = document.getElementById('search-input').value.trim();
+      if (q) params.set('q', q);
+      if (mineOnly) params.set('mine', '1');
+
+      const data = await Api.get('/api/supplies?' + params.toString());
+      grid.innerHTML = '';
+      if (!data.supplies.length) {
+        grid.innerHTML = '<div class="module"><p>Nothing here yet.</p></div>';
+        return;
+      }
+      data.supplies.forEach((s) => grid.appendChild(renderSupplyCard(s)));
+    }
+
+    function renderSupplyCard(s) {
+      const card = document.createElement('div');
+      card.className = 'module item-card';
+      const isOwner = me && s.ownerId === me.id;
+      const canManage = isOwner || (me && me.role === 'admin');
+
+      card.innerHTML = `
+        <div class="top-row">
+          <span class="badge cat">${escapeHtml(CATEGORY_LABEL[s.category] || s.category)}</span>
+          <span>
+            ${s.overdue ? '<span class="badge overdue">Overdue</span> ' : ''}
+            <span class="badge ${STATUS_CLASS[s.status] || ''}">${escapeHtml(STATUS_LABEL[s.status] || s.status)}</span>
+          </span>
+        </div>
+        <h3>${escapeHtml(s.title)}</h3>
+        <p>${escapeHtml(s.description || 'No details given.')}</p>
+        <div class="meta">
+          Owner: ${escapeHtml(s.ownerName)}${isOwner ? ' (you)' : ''}<br/>
+          ${s.status === 'on_loan' && s.dueDate ? `Due back: ${escapeHtml(formatDate(s.dueDate))}${s.borrowerName ? ` · with ${escapeHtml(s.borrowerName)}${s.borrowedByMe ? ' (you)' : ''}` : ''}<br/>` : ''}
+          ${canManage && s.pendingCount ? `${s.pendingCount} pending request${s.pendingCount === 1 ? '' : 's'}` : ''}
+        </div>
+        <div class="actions"></div>
+        <form class="borrow-form">
+          <div class="row">
+            <label style="margin:0">Days</label>
+            <input type="number" min="1" max="30" value="3" class="b-days" required />
+            <input type="text" class="b-note" placeholder="Why do you need it? (optional)" maxlength="200" />
+          </div>
+          <div class="row">
+            <button class="primary" type="submit">Send request</button>
+            <button class="small b-cancel" type="button">Cancel</button>
+          </div>
+          <div class="msg b-msg"></div>
+        </form>
+        <div class="claims-box" style="display:none"></div>
+      `;
+
+      const actions = card.querySelector('.actions');
+      const form = card.querySelector('.borrow-form');
+
+      if (!isOwner && s.status === 'available') {
+        const b = document.createElement('button');
+        b.className = 'primary';
+        b.textContent = 'Borrow';
+        b.addEventListener('click', () => form.classList.toggle('open'));
+        actions.appendChild(b);
+      }
+      card.querySelector('.b-cancel').addEventListener('click', () => form.classList.remove('open'));
+      form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const msgEl = card.querySelector('.b-msg');
+        try {
+          await Api.post(`/api/supplies/${s.id}/borrow`, {
+            days: Number(card.querySelector('.b-days').value),
+            message: card.querySelector('.b-note').value.trim(),
+          });
+          loadSupplies();
+          loadMyRequests();
+        } catch (err) {
+          msgEl.className = 'msg b-msg error';
+          msgEl.textContent = err.message;
+        }
+      });
+
+      if (canManage) {
+        const box = card.querySelector('.claims-box');
+        const viewBtn = document.createElement('button');
+        viewBtn.className = 'secondary';
+        viewBtn.textContent = 'Requests';
+        viewBtn.addEventListener('click', async () => {
+          if (box.style.display !== 'none') { box.style.display = 'none'; return; }
+          await fillRequests(box, s);
+          box.style.display = 'flex';
+        });
+        actions.appendChild(viewBtn);
+
+        if (s.status !== 'on_loan') {
+          const wBtn = document.createElement('button');
+          wBtn.className = 'small';
+          wBtn.textContent = 'Withdraw';
+          wBtn.addEventListener('click', async () => {
+            if (!confirm('Remove this listing?')) return;
+            try { await Api.patch(`/api/supplies/${s.id}/withdraw`); loadSupplies(); } catch (err) { alert(err.message); }
+          });
+          actions.appendChild(wBtn);
+        }
+      }
+      return card;
+    }
+
+    async function fillRequests(box, s) {
+      const data = await Api.get(`/api/supplies/${s.id}/requests`);
+      box.innerHTML = data.requests.length ? '' : '<div class="meta">No requests yet.</div>';
+      data.requests.forEach((r) => {
+        const row = document.createElement('div');
+        row.className = 'claim-row';
+        row.innerHTML = `
+          <div class="claim-info">
+            <div class="who">${escapeHtml(r.borrowerName)} <span class="badge ${REQ_CLASS[r.status] || ''}">${escapeHtml(r.status)}</span>${r.overdue ? ' <span class="badge overdue">overdue</span>' : ''}</div>
+            <div class="msg">${r.days} day${r.days === 1 ? '' : 's'} · ${escapeHtml(r.message || 'No note left.')}</div>
+          </div>`;
+        const acts = document.createElement('div');
+        acts.style.cssText = 'display:flex;gap:6px';
+        const add = (label, fn) => {
+          const b = document.createElement('button');
+          b.className = 'small';
+          b.textContent = label;
+          b.addEventListener('click', async () => {
+            try { await fn(); loadSupplies(); loadMyRequests(); } catch (err) { alert(err.message); }
+          });
+          acts.appendChild(b);
+        };
+        if (r.status === 'pending') {
+          add('Approve', () => Api.post(`/api/supplies/requests/${r.id}/approve`));
+          add('Decline', () => Api.post(`/api/supplies/requests/${r.id}/reject`));
+        } else if (r.status === 'approved') {
+          add('Mark returned', () => Api.post(`/api/supplies/requests/${r.id}/return`));
+        }
+        if (acts.children.length) row.appendChild(acts);
+        box.appendChild(row);
+      });
+    }
+
+    // ---- My requests ----
+    async function loadMyRequests() {
+      const wrap = document.getElementById('my-requests');
+      const data = await Api.get('/api/supplies/requests/mine');
+      wrap.innerHTML = '';
+      if (!data.requests.length) {
+        wrap.innerHTML = '<div class="meta" style="margin-top:12px">You haven\'t asked to borrow anything yet.</div>';
+        return;
+      }
+      data.requests.forEach((r) => {
+        const row = document.createElement('div');
+        row.className = 'req-row';
+        const detail = r.status === 'approved'
+          ? `Due back ${escapeHtml(formatDate(r.dueDate))}`
+          : `${r.days} day${r.days === 1 ? '' : 's'} requested · ${escapeHtml(timeAgo(r.createdAt))}`;
+        row.innerHTML = `
+          <div class="info">
+            <div class="t">${escapeHtml(r.supplyTitle)} <span class="badge ${REQ_CLASS[r.status] || ''}">${escapeHtml(r.status)}</span>${r.overdue ? ' <span class="badge overdue">Overdue</span>' : ''}</div>
+            <div class="m">From ${escapeHtml(r.ownerName)} · ${detail}</div>
+          </div>`;
+        if (r.status === 'pending') {
+          const b = document.createElement('button');
+          b.className = 'small';
+          b.textContent = 'Cancel request';
+          b.addEventListener('click', async () => {
+            try { await Api.post(`/api/supplies/requests/${r.id}/cancel`); loadMyRequests(); loadSupplies(); } catch (err) { alert(err.message); }
+          });
+          row.appendChild(b);
+        }
+        wrap.appendChild(row);
+      });
+    }
+
+    document.getElementById('logout-btn').addEventListener('click', () => {
+      Api.token = null;
+      window.location.href = 'index.html';
+    });
+
+    (async function init() {
+      try {
+        await loadMe();
+        await Promise.all([loadSupplies(), loadMyRequests()]);
+      } catch (err) {
+        handleInitError(err);
+      }
+    })();
+  </script>
+</body>
+</html>

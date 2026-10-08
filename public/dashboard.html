@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>H.I.V.E. — Dashboard</title>
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header class="top">
+    <div class="brand">
+      <div class="logo-hex">H</div>
+      <div>
+        <h1>H.I.V.E.</h1>
+        <div class="tagline">Hub for Items, Venues &amp; Exchange</div>
+      </div>
+    </div>
+    <div class="who">
+      <span id="who-name">—</span>
+      <span class="badge role" id="who-role">—</span>
+      <button class="small" id="logout-btn" type="button">Log out</button>
+    </div>
+  </header>
+
+  <main>
+    <svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs><linearGradient id="emberGrad" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ff5a36"/><stop offset="1" stop-color="#ffd23f"/></linearGradient></defs></svg>
+    <section class="hero">
+      <div class="intro">
+        <h2>Modules</h2>
+        <p>Everything happening on campus, in one hive. Pick a cell to get started.</p>
+        <div class="legend"><span><span class="badge live">Live</span> ready to use</span><span><span class="badge soon">Coming soon</span> on the roadmap</span></div>
+      </div>
+      <div class="hc-wrap"><div class="hc">
+        <a class="hx t1 live" href="lost-found.html">
+          <svg viewBox="0 0 100 115.47" preserveAspectRatio="none"><path class="fill" d="M50 0 L100 28.87 L100 86.6 L50 115.47 L0 86.6 L0 28.87 Z"/><path class="o" d="M50 0 L100 28.87 L100 86.6 L50 115.47 L0 86.6 L0 28.87 Z"/><path class="i" d="M50.00 4.33 L96.25 31.03 L96.25 84.44 L50.00 111.14 L3.75 84.44 L3.75 31.03 Z"/></svg>
+          <div class="txt"><div class="ico">&#128269;</div><span class="badge live">Live</span><h3>Lost &amp; Found</h3><p>Report or claim an item. Admins verify every handover.</p></div>
+        </a>
+        <a class="hx t2 live" href="supplies.html">
+          <svg viewBox="0 0 100 115.47" preserveAspectRatio="none"><path class="fill" d="M50 0 L100 28.87 L100 86.6 L50 115.47 L0 86.6 L0 28.87 Z"/><path class="o" d="M50 0 L100 28.87 L100 86.6 L50 115.47 L0 86.6 L0 28.87 Z"/><path class="i" d="M50.00 4.33 L96.25 31.03 L96.25 84.44 L50.00 111.14 L3.75 84.44 L3.75 31.03 Z"/></svg>
+          <div class="txt"><div class="ico">&#129309;</div><span class="badge live">Live</span><h3>Supplies Sharing</h3><p>Borrow or lend stationery and equipment.</p></div>
+        </a>
+        <div class="hx t3 soon">
+          <svg viewBox="0 0 100 115.47" preserveAspectRatio="none"><path class="fill" d="M50 0 L100 28.87 L100 86.6 L50 115.47 L0 86.6 L0 28.87 Z"/><path class="o" d="M50 0 L100 28.87 L100 86.6 L50 115.47 L0 86.6 L0 28.87 Z"/><path class="i" d="M50.00 4.33 L96.25 31.03 L96.25 84.44 L50.00 111.14 L3.75 84.44 L3.75 31.03 Z"/></svg>
+          <div class="txt"><div class="ico">&#128197;</div><span class="badge soon">Coming soon</span><h3>Lab &amp; Classroom Booking</h3><p>Reserve labs and rooms for projects and clubs.</p></div>
+        </div>
+      </div></div>
+    </section>
+
+    <section class="panel">
+      <h2>Notifications <span class="badge live" id="unread-badge" style="display:none"></span></h2>
+      <div class="hint">Things that happen on your account — welcomes, role changes, and updates from future modules.</div>
+      <div style="margin-bottom:14px">
+        <button class="secondary" id="mark-all-btn" type="button">Mark all read</button>
+      </div>
+      <ul class="notes" id="notes-list">
+        <li><span>Loading…</span></li>
+      </ul>
+    </section>
+
+    <section class="panel" id="admin-panel" style="display:none">
+      <h2>Admin — Manage users</h2>
+      <div class="hint">Promote or demote accounts. You can't change your own role from here.</div>
+      <table>
+        <thead>
+          <tr><th>Name</th><th>Email</th><th>Role</th><th>Change role</th></tr>
+        </thead>
+        <tbody id="users-body"></tbody>
+      </table>
+    </section>
+
+    <footer class="foot">H.I.V.E. · Increment 0 — Core Platform</footer>
+  </main>
+
+  <script src="bg.js"></script>
+  <script src="api.js"></script>
+  <script>
+    if (!Api.token) {
+      window.location.href = 'index.html';
+    }
+
+    let me = null;
+
+    async function loadMe() {
+      const data = await Api.get('/api/auth/me');
+      me = data.user;
+      document.getElementById('who-name').textContent = me.name;
+      document.getElementById('who-role').textContent = me.role;
+      if (me.role === 'admin') {
+        document.getElementById('admin-panel').style.display = 'block';
+        loadUsers();
+      }
+    }
+
+    async function loadNotifications() {
+      const data = await Api.get('/api/notifications');
+      const list = document.getElementById('notes-list');
+      list.innerHTML = '';
+      if (!data.notifications.length) {
+        list.innerHTML = '<li><span>No notifications yet.</span></li>';
+      } else {
+        data.notifications.forEach((n) => {
+          const li = document.createElement('li');
+          if (!n.isRead) li.classList.add('unread');
+          const msg = document.createElement('span');
+          msg.textContent = n.message;
+          const when = document.createElement('span');
+          when.className = 'when';
+          when.textContent = timeAgo(n.createdAt);
+          li.append(msg, when);
+          list.appendChild(li);
+        });
+      }
+      const badge = document.getElementById('unread-badge');
+      if (data.unreadCount > 0) {
+        badge.style.display = 'inline-block';
+        badge.textContent = `${data.unreadCount} unread`;
+      } else {
+        badge.style.display = 'none';
+      }
+    }
+
+    async function loadUsers() {
+      const data = await Api.get('/api/users');
+      const body = document.getElementById('users-body');
+      body.innerHTML = '';
+      data.users.forEach((u) => {
+        const tr = document.createElement('tr');
+        const isSelf = me && u.id === me.id;
+        tr.innerHTML = `
+          <td>${escapeHtml(u.name)}</td>
+          <td>${escapeHtml(u.email)}</td>
+          <td><span class="badge role">${u.role}</span></td>
+          <td>
+            <select data-id="${u.id}" ${isSelf ? 'disabled' : ''}>
+              ${['student', 'faculty', 'admin'].map((r) => `<option value="${r}" ${r === u.role ? 'selected' : ''}>${r}</option>`).join('')}
+            </select>
+          </td>`;
+        body.appendChild(tr);
+      });
+
+      body.querySelectorAll('select').forEach((sel) => {
+        sel.addEventListener('change', async () => {
+          try {
+            await Api.patch(`/api/users/${sel.dataset.id}/role`, { role: sel.value });
+            loadUsers();
+          } catch (err) {
+            alert(err.message);
+            loadUsers();
+          }
+        });
+      });
+    }
+
+    document.getElementById('logout-btn').addEventListener('click', () => {
+      Api.token = null;
+      window.location.href = 'index.html';
+    });
+
+    document.getElementById('mark-all-btn').addEventListener('click', async () => {
+      await Api.post('/api/notifications/read-all');
+      loadNotifications();
+    });
+
+    (async function init() {
+      try {
+        await loadMe();
+        await loadNotifications();
+      } catch (err) {
+        handleInitError(err);
+      }
+    })();
+  </script>
+</body>
+</html>

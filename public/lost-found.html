@@ -1,0 +1,347 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>H.I.V.E. — Lost &amp; Found</title>
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header class="top">
+    <div class="brand">
+      <div class="logo-hex">H</div>
+      <div>
+        <h1>H.I.V.E.</h1>
+        <div class="tagline">Lost &amp; Found</div>
+      </div>
+    </div>
+    <div class="who">
+      <span id="who-name">—</span>
+      <span class="badge role" id="who-role">—</span>
+      <button class="small" id="logout-btn" type="button">Log out</button>
+    </div>
+  </header>
+
+  <main>
+    <a class="back-link" href="dashboard.html">&larr; Back to dashboard</a>
+
+    <section>
+      <div class="panel-toggle" id="report-toggle">
+        <h2 style="margin:0">Report an item</h2>
+        <button class="secondary" type="button" id="report-toggle-btn">+ New report</button>
+      </div>
+
+      <div class="report-form" id="report-form-wrap">
+        <form id="report-form" class="stack" style="margin-top:16px; max-width:640px">
+          <div class="pill-group" id="type-toggle">
+            <button type="button" class="pill active" data-type="lost">I lost something</button>
+            <button type="button" class="pill" data-type="found">I found something</button>
+          </div>
+          <input type="hidden" id="item-type" value="lost" />
+
+          <div>
+            <label for="item-title">Title</label>
+            <input type="text" id="item-title" required placeholder="e.g. Black Casio calculator" />
+          </div>
+
+          <div class="grid2">
+            <div>
+              <label for="item-category">Category</label>
+              <select id="item-category">
+                <option value="electronics">Electronics</option>
+                <option value="documents">Documents</option>
+                <option value="accessories">Accessories</option>
+                <option value="clothing">Clothing</option>
+                <option value="books">Books</option>
+                <option value="keys">Keys</option>
+                <option value="other" selected>Other</option>
+              </select>
+            </div>
+            <div>
+              <label for="item-date">Date</label>
+              <input type="date" id="item-date" />
+            </div>
+          </div>
+
+          <div>
+            <label for="item-location">Location</label>
+            <input type="text" id="item-location" placeholder="e.g. Library, 2nd floor" />
+          </div>
+
+          <div>
+            <label for="item-description">Description</label>
+            <textarea id="item-description" rows="3" placeholder="Any identifying details — color, brand, stickers, contents..."></textarea>
+          </div>
+
+          <button class="primary" type="submit">Submit report</button>
+          <div id="report-msg" class="msg"></div>
+        </form>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>Browse</h2>
+      <div class="toolbar">
+        <div class="pill-group" id="filter-type">
+          <button type="button" class="pill active" data-type="">All</button>
+          <button type="button" class="pill" data-type="lost">Lost</button>
+          <button type="button" class="pill" data-type="found">Found</button>
+        </div>
+        <input type="text" id="search-input" placeholder="Search title or description..." />
+        <select id="filter-category">
+          <option value="">All categories</option>
+          <option value="electronics">Electronics</option>
+          <option value="documents">Documents</option>
+          <option value="accessories">Accessories</option>
+          <option value="clothing">Clothing</option>
+          <option value="books">Books</option>
+          <option value="keys">Keys</option>
+          <option value="other">Other</option>
+        </select>
+        <button class="small" id="mine-toggle" type="button">My posts only</button>
+      </div>
+
+      <div class="modules" id="items-grid">
+        <div class="module"><p>Loading…</p></div>
+      </div>
+    </section>
+
+    <footer class="foot">H.I.V.E. · Increment 1 — Lost &amp; Found</footer>
+  </main>
+
+  <script src="bg.js"></script>
+  <script src="api.js"></script>
+  <script>
+    if (!Api.token) window.location.href = 'index.html';
+
+    let me = null;
+    let currentType = '';
+    let mineOnly = false;
+    const CATEGORY_LABEL = { electronics: 'Electronics', documents: 'Documents', accessories: 'Accessories', clothing: 'Clothing', books: 'Books', keys: 'Keys', other: 'Other' };
+    const STATUS_LABEL = { open: 'Open', claim_pending: 'Pending', resolved: 'Resolved', closed: 'Closed' };
+    const STATUS_CLASS = { open: 'live', claim_pending: 'pending', resolved: 'resolved', closed: 'closed' };
+
+    function escapeHtml(s) {
+      return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    }
+
+    async function loadMe() {
+      const data = await Api.get('/api/auth/me');
+      me = data.user;
+      document.getElementById('who-name').textContent = me.name;
+      document.getElementById('who-role').textContent = me.role;
+    }
+
+    // ---- Report form ----
+    const toggleBtn = document.getElementById('report-toggle-btn');
+    const formWrap = document.getElementById('report-form-wrap');
+    toggleBtn.addEventListener('click', () => {
+      formWrap.classList.toggle('open');
+      toggleBtn.textContent = formWrap.classList.contains('open') ? '− Close' : '+ New report';
+    });
+
+    document.querySelectorAll('#type-toggle .pill').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('#type-toggle .pill').forEach((b) => b.classList.remove('active'));
+        btn.classList.add('active');
+        document.getElementById('item-type').value = btn.dataset.type;
+      });
+    });
+
+    document.getElementById('report-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const msgEl = document.getElementById('report-msg');
+      try {
+        await Api.post('/api/items', {
+          type: document.getElementById('item-type').value,
+          title: document.getElementById('item-title').value.trim(),
+          category: document.getElementById('item-category').value,
+          location: document.getElementById('item-location').value.trim(),
+          dateOccurred: document.getElementById('item-date').value || null,
+          description: document.getElementById('item-description').value.trim(),
+        });
+        msgEl.className = 'msg ok';
+        msgEl.textContent = 'Reported! It now shows up in the browse list below.';
+        e.target.reset();
+        document.getElementById('item-type').value = 'lost';
+        document.querySelectorAll('#type-toggle .pill').forEach((b, i) => b.classList.toggle('active', i === 0));
+        loadItems();
+      } catch (err) {
+        msgEl.className = 'msg error';
+        msgEl.textContent = err.message;
+      }
+    });
+
+    // ---- Browse / filter ----
+    document.querySelectorAll('#filter-type .pill').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('#filter-type .pill').forEach((b) => b.classList.remove('active'));
+        btn.classList.add('active');
+        currentType = btn.dataset.type;
+        loadItems();
+      });
+    });
+
+    document.getElementById('filter-category').addEventListener('change', loadItems);
+
+    let searchDebounce;
+    document.getElementById('search-input').addEventListener('input', () => {
+      clearTimeout(searchDebounce);
+      searchDebounce = setTimeout(loadItems, 300);
+    });
+
+    const mineBtn = document.getElementById('mine-toggle');
+    mineBtn.addEventListener('click', () => {
+      mineOnly = !mineOnly;
+      mineBtn.classList.toggle('secondary', mineOnly);
+      loadItems();
+    });
+
+    async function loadItems() {
+      const grid = document.getElementById('items-grid');
+      const params = new URLSearchParams();
+      if (currentType) params.set('type', currentType);
+      const category = document.getElementById('filter-category').value;
+      if (category) params.set('category', category);
+      const q = document.getElementById('search-input').value.trim();
+      if (q) params.set('q', q);
+      if (mineOnly) params.set('mine', '1');
+
+      const data = await Api.get('/api/items?' + params.toString());
+      grid.innerHTML = '';
+
+      if (!data.items.length) {
+        grid.innerHTML = '<div class="module"><p>Nothing here yet.</p></div>';
+        return;
+      }
+
+      data.items.forEach((item) => grid.appendChild(renderItemCard(item)));
+    }
+
+    function renderItemCard(item) {
+      const card = document.createElement('div');
+      card.className = 'module item-card';
+      const isOwner = me && item.reportedBy === me.id;
+      const canSeeClaims = isOwner || (me && me.role === 'admin');
+
+      card.innerHTML = `
+        <div class="top-row">
+          <span class="badge type-${item.type}">${item.type === 'lost' ? 'Lost' : 'Found'}</span>
+          <span class="badge ${STATUS_CLASS[item.status] || ''}">${STATUS_LABEL[item.status] || item.status}</span>
+        </div>
+        <h3>${escapeHtml(item.title)}</h3>
+        <p>${escapeHtml(item.description || 'No description given.')}</p>
+        <div class="meta">
+          ${item.category ? `Category: ${CATEGORY_LABEL[item.category] || item.category}<br/>` : ''}
+          ${item.location ? `Location: ${escapeHtml(item.location)}<br/>` : ''}
+          ${item.dateOccurred ? `Date: ${escapeHtml(item.dateOccurred)}<br/>` : ''}
+          Posted by ${escapeHtml(item.reporterName)}${isOwner ? ' (you)' : ''}
+        </div>
+        <div class="actions"></div>
+        <div class="claims-box" style="display:none"></div>
+      `;
+
+      const actions = card.querySelector('.actions');
+
+      if (item.status === 'open' && !isOwner) {
+        const claimBtn = document.createElement('button');
+        claimBtn.className = 'primary';
+        claimBtn.textContent = item.type === 'found' ? 'This is mine' : "I found this";
+        claimBtn.addEventListener('click', async () => {
+          const note = prompt('Add a short note to help verify your claim (optional):');
+          if (note === null) return; // user pressed Cancel
+          const message = note;
+          try {
+            await Api.post(`/api/items/${item.id}/claim`, { message });
+            loadItems();
+          } catch (err) {
+            alert(err.message);
+          }
+        });
+        actions.appendChild(claimBtn);
+      }
+
+      if (isOwner && (item.status === 'open' || item.status === 'claim_pending')) {
+        const closeBtn = document.createElement('button');
+        closeBtn.className = 'small';
+        closeBtn.textContent = 'Withdraw';
+        closeBtn.addEventListener('click', async () => {
+          if (!confirm('Withdraw this post?')) return;
+          await Api.patch(`/api/items/${item.id}/close`);
+          loadItems();
+        });
+        actions.appendChild(closeBtn);
+      }
+
+      if (canSeeClaims) {
+        const claimsBox = card.querySelector('.claims-box');
+        const viewBtn = document.createElement('button');
+        viewBtn.className = 'secondary';
+        viewBtn.textContent = 'View claims';
+        viewBtn.addEventListener('click', async () => {
+          const isOpen = claimsBox.style.display !== 'none';
+          if (isOpen) { claimsBox.style.display = 'none'; return; }
+          const data = await Api.get(`/api/items/${item.id}/claims`);
+          claimsBox.innerHTML = data.claims.length ? '' : '<div class="meta">No claims yet.</div>';
+          data.claims.forEach((c) => claimsBox.appendChild(renderClaimRow(c, item)));
+          claimsBox.style.display = 'flex';
+        });
+        actions.appendChild(viewBtn);
+      }
+
+      return card;
+    }
+
+    function renderClaimRow(c, item) {
+      const row = document.createElement('div');
+      row.className = 'claim-row';
+      row.innerHTML = `
+        <div class="claim-info">
+          <div class="who">${escapeHtml(c.claimantName)} <span class="badge ${c.status === 'pending' ? 'pending' : c.status === 'approved' ? 'resolved' : 'rejected'}">${c.status}</span></div>
+          <div class="msg">${escapeHtml(c.message || 'No note left.')}</div>
+        </div>
+      `;
+      if (me && me.role === 'admin' && c.status === 'pending') {
+        const actions = document.createElement('div');
+        actions.style.display = 'flex';
+        actions.style.gap = '6px';
+
+        const approveBtn = document.createElement('button');
+        approveBtn.className = 'small';
+        approveBtn.textContent = 'Approve';
+        approveBtn.addEventListener('click', async () => {
+          await Api.post(`/api/items/claims/${c.id}/approve`);
+          loadItems();
+        });
+
+        const rejectBtn = document.createElement('button');
+        rejectBtn.className = 'small';
+        rejectBtn.textContent = 'Reject';
+        rejectBtn.addEventListener('click', async () => {
+          await Api.post(`/api/items/claims/${c.id}/reject`);
+          loadItems();
+        });
+
+        actions.appendChild(approveBtn);
+        actions.appendChild(rejectBtn);
+        row.appendChild(actions);
+      }
+      return row;
+    }
+
+    document.getElementById('logout-btn').addEventListener('click', () => {
+      Api.token = null;
+      window.location.href = 'index.html';
+    });
+
+    (async function init() {
+      try {
+        await loadMe();
+        await loadItems();
+      } catch (err) {
+        handleInitError(err);
+      }
+    })();
+  </script>
+</body>
+</html>
