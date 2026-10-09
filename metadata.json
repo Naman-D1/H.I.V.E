@@ -1,0 +1,6 @@
+{
+  "name": "H.I.V.E",
+  "description": "Unified Campus Utility System for college campus management, lost & found, supplies sharing, lab bookings, and notifications.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

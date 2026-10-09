@@ -1,42 +1,71 @@
-const path = require('path');
+require('dotenv').config();
 const express = require('express');
-const bcrypt = require('bcryptjs');
-const config = require('./src/config');
-const db = require('./src/db');
+const cors = require('cors');
+const { errorHandler } = require('./src/middleware/errorHandler');
+
+// Route imports
+const authRoutes = require('./src/routes/auth.routes');
+const userRoutes = require('./src/routes/user.routes');
+const itemRoutes = require('./src/routes/item.routes');
+const claimRoutes = require('./src/routes/claim.routes');
+const supplyRoutes = require('./src/routes/supply.routes');
+const roomRoutes = require('./src/routes/room.routes');
+const bookingRoutes = require('./src/routes/booking.routes');
+const notificationRoutes = require('./src/routes/notification.routes');
+const statsRoutes = require('./src/routes/stats.routes');
 
 const app = express();
-app.use(express.json({ limit: '100kb' }));
-app.use(express.static(path.join(__dirname, 'public')));
+const PORT = process.env.BACKEND_PORT || 5000;
 
-app.get('/api/health', (req, res) => res.json({ status: 'ok' }));
-app.use('/api/auth', require('./src/routes/auth'));
-app.use('/api/users', require('./src/routes/users'));
-app.use('/api/notifications', require('./src/routes/notifications'));
-app.use('/api/items', require('./src/routes/items'));                     // Increment 1: Lost & Found
-app.use('/api/supplies', require('./src/routes/supplies'));               // Increment 2: Supplies Sharing
-// Increment 3: app.use('/api/bookings', require('./src/routes/bookings')); // Reservations
+// Middleware
+app.use(cors({
+  origin: '*',
+  methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+}));
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
-app.use('/api', (req, res) => res.status(404).json({ error: 'Not found' }));
-
-// Last-resort error handler so a bug never leaks a stack trace to the client.
-app.use((err, req, res, next) => {
-  console.error(err);
-  res.status(500).json({ error: 'Something went wrong on our side' });
+// Health Check
+app.get('/api/health', (req, res) => {
+  res.json({
+    success: true,
+    message: 'H.I.V.E. Campus Utility API is operating smoothly',
+    timestamp: new Date().toISOString(),
+    version: '1.0.0'
+  });
 });
 
-// Create the first admin from .env if there isn't one yet.
-function seedAdmin() {
-  if (!config.adminEmail || !config.adminPassword) return;
-  const exists = db.prepare('SELECT 1 FROM users WHERE email = ?').get(config.adminEmail);
-  if (exists) return;
-  db.prepare("INSERT INTO users (name, email, password_hash, role) VALUES ('Administrator', ?, ?, 'admin')")
-    .run(config.adminEmail, bcrypt.hashSync(config.adminPassword, 10));
-  console.log(`Seeded admin account: ${config.adminEmail}`);
-}
-seedAdmin();
+// Mount Routes
+app.use('/api/auth', authRoutes);
+app.use('/api/users', userRoutes);
+app.use('/api/items', itemRoutes);
+app.use('/api/claims', claimRoutes);
+app.use('/api/supplies', supplyRoutes);
+app.use('/api/rooms', roomRoutes);
+app.use('/api/bookings', bookingRoutes);
+app.use('/api/notifications', notificationRoutes);
+app.use('/api/stats', statsRoutes);
+
+// 404 Route handler
+app.use((req, res) => {
+  res.status(404).json({
+    success: false,
+    message: `API endpoint '${req.method} ${req.originalUrl}' not found`,
+    error: 'ENDPOINT_NOT_FOUND'
+  });
+});
+
+// Central Error Handler
+app.use(errorHandler);
 
 if (require.main === module) {
-  app.listen(config.port, () => console.log(`H.I.V.E. running at http://localhost:${config.port}`));
+  app.listen(PORT, '0.0.0.0', () => {
+    console.log(`=========================================`);
+    console.log(`🚀 H.I.V.E. Campus Backend Server Running`);
+    console.log(`📡 URL: http://0.0.0.0:${PORT}`);
+    console.log(`=========================================`);
+  });
 }
 
 module.exports = app;

@@ -1,114 +1,141 @@
-# H.I.V.E. — Hub for Items, Venues & Exchange
+# H.I.V.E. (Unified Campus Utility System)
 
-A unified campus platform combining **Digital Lost & Found**, **Stationery/Supplies Sharing**,
-and **Lab/Classroom Reservation** into one app, built using an Incremental software process model.
+H.I.V.E. is a centralized campus utility platform designed for colleges and universities. It unifies essential campus operations into one secure, accessible, mobile-first ecosystem.
 
-This repo contains **Increment 0: the core platform** — accounts, roles, and notifications —
-that every later increment (Lost & Found, Supplies, Bookings) will plug into.
+---
 
-## Tech stack
-- Node.js + Express
-- SQLite via `better-sqlite3` (no separate database server to install)
-- JWT authentication, bcrypt password hashing
-- Vanilla HTML/CSS/JS frontend (dark theme, neon green/yellow, hexagon UI)
+## 🏛️ System Overview
 
-## Running it
+The system combines seven core operational modules:
 
-1. **Install dependencies**
-   ```
-   npm install
-   ```
+1. **Authentication & Role Authorization**: Secure JWT authentication with strict role-based access for `STUDENT`, `FACULTY`, and `ADMIN`.
+2. **Lost & Found System**: Full reporting, categorization, searching, and claim verification workflow with owner alerts.
+3. **Supplies Sharing Marketplace**: Peer-to-peer sharing of academic books, scientific calculators, technical kits, and notes.
+4. **Classroom & Lab Booking**: Schedule requests with live interval overlap conflict prevention and faculty/admin approval queue.
+5. **Centralized Notification Engine**: Real-time event notifications for bookings, claims, and campus alerts.
+6. **Faculty Dashboard**: Request lab reservations, review student requests, and broadcast academic items.
+7. **Administrator Control Center**: Campus metrics analytics, user management, role promotion/demotion protections, and room status management.
 
-2. **Create your `.env` file**
-   ```
-   cp .env.example .env
-   ```
-   Then open `.env` and fill in at least:
-   - `JWT_SECRET` — any long random string (the comment in the file shows a command to generate one)
-   - `ADMIN_EMAIL` / `ADMIN_PASSWORD` — the first admin account gets created automatically on first run
+---
 
-3. **Start the server**
-   ```
-   npm start
-   ```
-   You should see:
-   ```
-   Seeded admin account: you@yourcollege.edu
-   H.I.V.E. running at http://localhost:3000
-   ```
+## 🏗️ Architecture
 
-4. Open **http://localhost:3000** in your browser — that's the whole app, frontend and backend served from the same place.
-
-## Running the tests
-
-```
-npm test
+```text
+                  ┌──────────────────────────────────────────────┐
+                  │          Android Mobile Application          │
+                  │        (Jetpack Compose / React Native)      │
+                  └──────────────────────┬───────────────────────┘
+                                         │ HTTPS / REST API
+                                         ▼
+                  ┌──────────────────────────────────────────────┐
+                  │             Node.js + Express API            │
+                  │   (Auth, Items, Supplies, Bookings, Notifs)  │
+                  └──────────────────────┬───────────────────────┘
+                                         │ Parameterized Queries & Transactions
+                                         ▼
+                  ┌──────────────────────────────────────────────┐
+                  │             SQLite Database (WAL)            │
+                  │          (PostgreSQL Migration Ready)        │
+                  └──────────────────────────────────────────────┘
 ```
 
-This runs 11 automated tests covering registration, login, role changes, and notifications,
-using a throwaway test database (your real `hive.db` is never touched).
+---
 
-## Project structure
+## 🔐 Pre-seeded Credentials (Development)
 
-```
-server.js              Express app entry point
-src/config.js          reads .env, exposes config values
-src/db.js               SQLite connection + schema
-src/middleware/auth.js  JWT auth + role-check middleware
-src/routes/             auth, users (admin), notifications
-src/services/           notification helper used by every module
-public/                 frontend (index.html = login/register, dashboard.html = main app)
-tests/core.test.js      automated test suite
-```
+| Persona | Email | Password | Role |
+| :--- | :--- | :--- | :--- |
+| **Administrator** | `admin@hive.local` | `Admin@123` | `ADMIN` |
+| **Faculty Member** | `faculty@hive.local` | `Faculty@123` | `FACULTY` |
+| **Student** | `student@hive.local` | `Student@123` | `STUDENT` |
 
-## A note for Windows users
+*(Note: The Android app also includes a 1-tap Demo Role Switcher in the top bar and profile screen to instantly test all 3 personas.)*
 
-If `npm start` crashes with a native-module error mentioning `better-sqlite3` or
-`RemoveEnvironmentCleanupHook`, it means your Node.js version is newer than the
-`better-sqlite3` build you have installed. This is already fixed in `package.json`
-(pinned to `better-sqlite3@^13.0.3`, which supports Node 22+), but if you installed
-dependencies before this fix, just do a clean reinstall:
+---
 
-```
-rmdir /s /q node_modules
-del package-lock.json
+## 🚀 Backend Setup & Execution
+
+### Prerequisites
+- Node.js 18+ (tested on Node.js v22 LTS)
+- npm 9+
+
+### Installation & Database Initialization
+```bash
+# 1. Install dependencies
 npm install
+
+# 2. Seed SQLite database with campus fixtures
+npm run seed
+
+# 3. Run automated backend test suite
+npm test
+
+# 4. Start the backend REST API
+npm start
+```
+The backend server runs on `http://0.0.0.0:5000`.
+
+---
+
+## 📱 Android App Execution & Networking
+
+### Android Emulator Loopback
+When testing in the Android Emulator, the host machine is accessible via `http://10.0.2.2:5000` rather than `localhost`.
+The Android app is pre-configured with `http://10.0.2.2:5000/` as the default API Base URL.
+
+### Standalone & Offline Mode
+The Android app is built with an **Offline-First Architecture** using **Room Database**. It pre-seeds realistic campus records locally and syncs with the REST API automatically when the backend server is reachable.
+
+### Running with Gradle
+```bash
+# Compile and assemble debug APK
+gradle assembleDebug
+
+# Run unit tests
+gradle :app:testDebugUnitTest
 ```
 
-## Increment 1: Lost & Found
+---
 
-Live now. From the dashboard, click the **Lost & Found** module card (or go to
-`lost-found.html` directly).
+## 📡 API Endpoints Reference
 
-- **Report** a lost or found item (title, category, location, date, description)
-- **Browse & search** open items, filter by lost/found, category, or "my posts only"
-- **Claim** an open item you believe is yours — this moves it to "pending" and notifies
-  the original poster and every admin
-- **Admin verification** — an admin reviews the claim's note and approves or rejects it
-  from the "View claims" panel on that item. Approving resolves the item and auto-rejects
-  any other pending claims on it; rejecting reopens the item for new claims.
+### Authentication
+- `POST /api/auth/register` - Create new student account (role locked to `STUDENT`)
+- `POST /api/auth/login` - Authenticate and retrieve JWT
+- `GET /api/auth/me` - Retrieve current session user profile
+- `POST /api/auth/logout` - Logout session
+- `POST /api/auth/change-password` - Update password
 
-New tables: `items`, `claims` (see `src/db.js`). New route file: `src/routes/items.js`.
-Covered by `tests/items.test.js` (report validation, search, claim/approve/reject flow,
-permission checks, withdraw).
+### Lost & Found (`/api/items`)
+- `GET /api/items?search=&category=&status=` - Browse lost & found items
+- `GET /api/items/:id` - Item details with claims count
+- `POST /api/items` - Report lost or found item
+- `PATCH /api/items/:id` - Edit item (owner or admin)
+- `DELETE /api/items/:id` - Delete item (owner or admin)
 
-## Increment 2: Supplies Sharing
+### Claims (`/api/claims`)
+- `GET /api/claims` - List claims (role filtered)
+- `POST /api/items/:id/claims` - Submit claim with proof of ownership
+- `PATCH /api/claims/:id` - Approve/reject claim with atomic item status update
 
-Students lend and borrow stationery, books, lab equipment and tools. The owner handles the handover; admins can moderate.
+### Supplies Sharing (`/api/supplies`)
+- `GET /api/supplies?search=&category=&condition=&status=` - List supplies
+- `POST /api/supplies` - Post supply listing
+- `POST /api/supplies/:id/request` - Request supply from owner
+- `PATCH /api/supplies/requests/:requestId` - Accept/reject request
 
-- **List** something you can lend (`POST /api/supplies`), **browse/search/filter** (`GET /api/supplies?q=&category=&mine=1`).
-- **Request to borrow** for 1-30 days (`POST /api/supplies/:id/borrow`). Rules: not your own item, one pending request per item, at most **3 items on loan** per borrower.
-- The **owner approves or declines** (`POST /api/supplies/requests/:id/approve|reject`). Approving puts the item on loan, sets the due date, and auto-declines everyone else waiting.
-- The owner **marks it returned** (`.../return`), which makes it available again. Borrowers can **cancel** a pending request (`.../cancel`).
-- **Overdue** loans are flagged (computed from the due date; no background job, no automatic reminders yet).
-- Owners/admins can **withdraw** a listing unless it is on loan. Pending requests are closed with a notification.
-- Every step notifies the people involved through the Increment 0 notification service.
+### Classroom & Lab Bookings (`/api/bookings`)
+- `GET /api/rooms` - List campus rooms and facilities
+- `GET /api/rooms/:id/availability?date=YYYY-MM-DD` - Check bookings for a date
+- `GET /api/bookings` - List user / all bookings
+- `POST /api/bookings` - Request booking (validates interval overlaps)
+- `PATCH /api/bookings/:id` - Approve, reject, or cancel booking
 
-Fixes shipped with this increment: notification timestamps now read SQLite's UTC times correctly (no more "5h ago"), user-supplied text on the dashboard is HTML-escaped, and cancelling the Lost & Found claim prompt no longer submits the claim.
-
-## Roadmap (future increments)
-
-- **Increment 3** — Lab & Classroom Booking (reserve rooms/labs for a time slot)
-
-Each increment adds its own route file under `src/routes/` and reuses the
-auth, roles, and notification system already built here.
+### Notifications & Admin
+- `GET /api/notifications` - Retrieve notifications with unread count
+- `PATCH /api/notifications/:id/read` - Mark notification as read
+- `PATCH /api/notifications/read-all` - Mark all notifications read
+- `GET /api/stats` - Admin metrics (users, bookings, lost items, supplies)
+- `GET /api/users` - Admin user list with search & filter
+- `PATCH /api/users/:id/role` - Admin role update (protected against removing last admin)
+- `PATCH /api/users/:id/status` - Admin status update (ACTIVE / SUSPENDED)

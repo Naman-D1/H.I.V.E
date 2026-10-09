@@ -1,19 +1,23 @@
 {
-  "name": "hive",
-  "version": "0.2.0",
-  "description": "H.I.V.E. - Hub for Items, Venues & Exchange. Increment 0: core platform (auth, roles, notifications).",
+  "name": "hive-backend",
+  "version": "1.0.0",
+  "description": "H.I.V.E. - Unified Campus Utility System REST API Backend",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "dev": "node --watch server.js",
-    "test": "node --test"
+    "dev": "node server.js",
+    "seed": "node src/db/seed.js",
+    "test": "node --test tests/api.test.js"
   },
-  "license": "MIT",
+  "keywords": ["campus", "utility", "hive", "express", "sqlite"],
+  "author": "H.I.V.E. Team",
+  "license": "ISC",
   "dependencies": {
-    "bcryptjs": "^2.4.3",
+    "bcryptjs": "^3.0.3",
     "better-sqlite3": "^13.0.3",
-    "dotenv": "^16.4.5",
-    "express": "^4.21.0",
-    "jsonwebtoken": "^9.0.2"
+    "cors": "^2.8.6",
+    "dotenv": "^18.0.5",
+    "express": "^5.2.1",
+    "jsonwebtoken": "^9.0.3"
   }
 }
